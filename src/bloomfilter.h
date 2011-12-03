@@ -65,6 +65,7 @@ static inline int bloomtree_Add(BloomFilter * bf, Key * key)
     uint32_t (*hashfunc)(uint32_t, Key *) = _hash_char;
     register BTYPE mod = bf->array->bits;
     register int i;
+    register int result = 1;
     register uint32_t hash_res;
 
     if (key->shash == NULL)
@@ -72,18 +73,18 @@ static inline int bloomtree_Add(BloomFilter * bf, Key * key)
 
     for (i = bf->num_hashes - 1; i >= 0; --i) {
         hash_res = (*hashfunc)(bf->hash_seeds[i], key) % mod;
-        if (!mbarray_Test(bf->array, hash_res)) {
-            if (bf->count_correct) {
-                bf->elem_count++;
-            }
-            return -1;
+        if (result && !mbarray_Test(bf->array, hash_res)) {
+            result = 0;
         }
         if (mbarray_Set(bf->array, hash_res)) {
             return -2;
         }
     }
+    if (!result && bf->count_correct) {
+        bf->elem_count ++;
+    }
     // Return which bin the inserted element is in
-    return hash_res * (1 << bf->num_hashes) / mod;
+    return (hash_res * (1 << bf->num_hashes)) / mod;
 }
 __attribute__((always_inline))
 
@@ -98,13 +99,13 @@ static inline int bloomtree_Test(BloomFilter * bf, Key * key)
         hashfunc = _hash_long;
 
     for (i = bf->num_hashes - 1; i >= 0; --i) {
-        hash_res = (*hashfun)(bf->hash_seeds[i], key) % mod;
-        if (!mbarray_Test(bf->array, hash_res) {
+        hash_res = (*hashfunc)(bf->hash_seeds[i], key) % mod;
+        if (!mbarray_Test(bf->array, hash_res)) {
             return -1;
         }
     }
     // Return which bin the element could be in
-    return hash_res * (1 << bf->num_hashes) / mod;
+    return (hash_res * (1 << bf->num_hashes)) / mod;
 }
 __attribute__((always_inline))
 

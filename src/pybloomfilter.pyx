@@ -40,67 +40,6 @@ def bf_from_file(filename):
 class IndeterminateCountError(ValueError):
     pass
 
-cdef class BloomTree(BloomFilter):
-    def __cinit__(self, capacity, error_rate, filename, perm=0755):
-        BloomFilter.__cinit__(self, capacity, error_rate, filename, perm=0755)
-        # Allocate enough bins based on the number of hashes
-        self.bins = [set()] * (2 ** self.num_hashes)
-    
-    def getLeaf(self, item):
-        self._assert_open()
-        cdef cbloomfilter.Key key
-        if isinstance(item, str):
-            key.shash = item
-            key.nhash = len(item)
-        else:
-            key.shash = NULL
-            key.nhash = hash(item)
-        return self.bins[cbloomfilter.bloomtree_Test(self._bf, &key)]
-    
-    def __contains__(self, item):
-        self._assert_open()
-        cdef cbloomfilter.Key key
-        if isinstance(item, str):
-            key.shash = item
-            key.nhash = len(item)
-        else:
-            key.shash = NULL
-            key.nhash = hash(item)
-        return cbloomfilter.bloomtree_Test(self._bf, &key) >= 0
-    
-    def add(self, item):
-        self._assert_open()
-        cdef cbloomfilter.Key key
-        if isinstance(item, str):
-            key.shash = item
-            key.nhash = len(item)
-        else:
-            key.shash = NULL
-            key.nhash = hash(item)
-
-        result = cbloomfilter.bloomtree_Add(self._bf, &key)
-        if result == -2:
-            raise RuntimeError("Some problem occured while trying to add key.")
-        return result >= 0
-    
-    def __ior__(self, BloomTree other):
-        BloomFilter.__ior__(self, other)
-        for i in range(len(self.bins)):
-            self.bins[i] |= other.bins[i]
-        return self
-
-    def union(self, BloomTree other):
-        return self.__ior__(other)
-
-    def __iand__(self, BloomTree other):
-        BloomFilter.__iand__(self, other)
-        for i in range(len(self.bins)):
-            self.bins[i] &= other.bins[i]
-        return self
-
-    def intersection(self, BloomTree other):
-        return self.__iand__(other)
-
 cdef class BloomFilter:
     """
     The BloomFilter class implements a bloom filter that uses mmap'd files.
@@ -353,3 +292,77 @@ cdef class BloomFilter:
 
     from_base64 = staticmethod(bf_from_base64)
     open = staticmethod(bf_from_file)
+
+cdef class BloomTree(BloomFilter):
+    cdef list bins
+    
+    def __cinit__(self, capacity, error_rate, filename, perm=0755):
+        BloomFilter.__init__(self, capacity, error_rate, filename, perm=0755)
+        # Allocate enough bins based on the number of hashes
+        self.bins = [set() for i in range(2 ** self.num_hashes)]
+
+    property bins:
+        def __get__(self):
+            self._assert_open()
+            return self.bins
+    
+    def getLeaf(self, item):
+        self._assert_open()
+        cdef cbloomfilter.Key key
+        if isinstance(item, str):
+            key.shash = item
+            key.nhash = len(item)
+        else:
+            key.shash = NULL
+            key.nhash = hash(item)
+        bin = cbloomfilter.bloomtree_Test(self._bf, &key)
+        if bin < 0:
+            return set()
+        else:
+            print 'Bin: %i' % bin
+            return self.bins[bin]
+
+    def __contains__(self, item):
+        self._assert_open()
+        cdef cbloomfilter.Key key
+        if isinstance(item, str):
+            key.shash = item
+            key.nhash = len(item)
+        else:
+            key.shash = NULL
+            key.nhash = hash(item)
+        return cbloomfilter.bloomtree_Test(self._bf, &key) >= 0
+
+    def add(self, item):
+        self._assert_open()
+        cdef cbloomfilter.Key key
+        if isinstance(item, str):
+            key.shash = item
+            key.nhash = len(item)
+        else:
+            key.shash = NULL
+            key.nhash = hash(item)
+
+        result = cbloomfilter.bloomtree_Add(self._bf, &key)
+        if result == -2:
+            raise RuntimeError("Some problem occured while trying to add key.")
+        self.bins[result].add(item)
+        return result >= 0
+
+    def __ior__(self, BloomTree other):
+        BloomFilter.__ior__(self, other)
+        for i in range(len(self.bins)):
+            self.bins[i] |= other.bins[i]
+        return self
+
+    def union(self, BloomTree other):
+        return self.__ior__(other)
+
+    def __iand__(self, BloomTree other):
+        BloomFilter.__iand__(self, other)
+        for i in range(len(self.bins)):
+            self.bins[i] &= other.bins[i]
+        return self
+
+    def intersection(self, BloomTree other):
+        return self.__iand__(other)
