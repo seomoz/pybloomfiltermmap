@@ -66,7 +66,7 @@ static inline int bloomtree_Add(BloomFilter * bf, Key * key)
     register BTYPE mod = bf->array->bits;
     register int i;
     register int result = 1;
-    register uint32_t hash_res;
+    register uint64_t hash_res;
 
     if (key->shash == NULL)
         hashfunc = _hash_long;
@@ -84,7 +84,7 @@ static inline int bloomtree_Add(BloomFilter * bf, Key * key)
         bf->elem_count ++;
     }
     // Return which bin the inserted element is in
-    return (hash_res * (1 << bf->num_hashes)) / mod;
+    return (hash_res << bf->num_hashes) / mod;
 }
 __attribute__((always_inline))
 
@@ -93,7 +93,7 @@ static inline int bloomtree_Test(BloomFilter * bf, Key * key)
     register BTYPE mod = bf->array->bits;
     register uint32_t (*hashfunc)(uint32_t, Key *) = _hash_char;
     register int i;
-    register uint32_t hash_res;
+    register uint64_t hash_res;
 
     if (key->shash == NULL)
         hashfunc = _hash_long;
@@ -105,7 +105,7 @@ static inline int bloomtree_Test(BloomFilter * bf, Key * key)
         }
     }
     // Return which bin the element could be in
-    return (hash_res * (1 << bf->num_hashes)) / mod;
+    return (hash_res << bf->num_hashes) / mod;
 }
 __attribute__((always_inline))
 
