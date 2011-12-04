@@ -48,7 +48,7 @@ cdef class BloomFilter:
     cdef cbloomfilter.BloomFilter * _bf
     cdef int _closed
 
-    def __cinit__(self, capacity, error_rate, filename, perm=0755):
+    def __cinit__(self, capacity, error_rate, filename, perm=0755, *args, **kwargs):
         cdef char * seeds
         _closed = 0
         mode = "rw+"
@@ -294,12 +294,13 @@ cdef class BloomFilter:
     open = staticmethod(bf_from_file)
 
 cdef class BloomTree(BloomFilter):
+    cdef int  numBins
     cdef list bins
     
-    def __cinit__(self, capacity, error_rate, filename, perm=0755):
-        BloomFilter.__init__(self, capacity, error_rate, filename, perm=0755)
-        # Allocate enough bins based on the number of hashes
-        self.bins = [set() for i in range(2 ** self.num_hashes)]
+    def __cinit__(self, capacity, error_rate, filename, perm=0755, numBins=None):
+        # Allocate enough bins
+        self.numBins = numBins or (capacity / 20)
+        self.bins    = [set() for i in range(self.numBins)]
 
     property bins:
         def __get__(self):
@@ -315,7 +316,7 @@ cdef class BloomTree(BloomFilter):
         else:
             key.shash = NULL
             key.nhash = hash(item)
-        bin = cbloomfilter.bloomtree_Test(self._bf, &key)
+        bin = cbloomfilter.bloomtree_Test(self._bf, &key, self.numBins)
         if bin < 0:
             return set()
         else:
@@ -330,7 +331,7 @@ cdef class BloomTree(BloomFilter):
         else:
             key.shash = NULL
             key.nhash = hash(item)
-        return cbloomfilter.bloomtree_Test(self._bf, &key) >= 0
+        return cbloomfilter.bloomtree_Test(self._bf, &key, self.numBins) >= 0
 
     def add(self, item, value=None):
         self._assert_open()
@@ -342,7 +343,7 @@ cdef class BloomTree(BloomFilter):
             key.shash = NULL
             key.nhash = hash(item)
 
-        result = cbloomfilter.bloomtree_Add(self._bf, &key)
+        result = cbloomfilter.bloomtree_Add(self._bf, &key, self.numBins)
         if result == -2:
             raise RuntimeError("Some problem occured while trying to add key.")
         self.bins[result].add(value or item)
