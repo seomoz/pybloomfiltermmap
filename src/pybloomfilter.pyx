@@ -319,7 +319,6 @@ cdef class BloomTree(BloomFilter):
         if bin < 0:
             return set()
         else:
-            print 'Bin: %i' % bin
             return self.bins[bin]
 
     def __contains__(self, item):
@@ -333,7 +332,7 @@ cdef class BloomTree(BloomFilter):
             key.nhash = hash(item)
         return cbloomfilter.bloomtree_Test(self._bf, &key) >= 0
 
-    def add(self, item):
+    def add(self, item, value=None):
         self._assert_open()
         cdef cbloomfilter.Key key
         if isinstance(item, str):
@@ -346,7 +345,7 @@ cdef class BloomTree(BloomFilter):
         result = cbloomfilter.bloomtree_Add(self._bf, &key)
         if result == -2:
             raise RuntimeError("Some problem occured while trying to add key.")
-        self.bins[result].add(item)
+        self.bins[result].add(value or item)
         return result >= 0
 
     def __ior__(self, BloomTree other):
