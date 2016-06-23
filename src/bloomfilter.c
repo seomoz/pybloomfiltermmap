@@ -1,15 +1,13 @@
 #ifndef __BLOOMFILTER_C
 #define __BLOOMFILTER_C
-#include <string.h>
-#include <errno.h>
 #include <stdio.h>
-#include <fcntl.h>
-#include "md5.h"
+#include <string.h>
 
 #include "bloomfilter.h"
 
-BloomFilter *bloomfilter_Create_Malloc(size_t max_num_elem, double error_rate,
-                                BTYPE num_bits, int *hash_seeds, int num_hashes)
+BloomFilter *bloomfilter_Create(size_t max_num_elem, double error_rate,
+                                BTYPE num_bits, int *hash_seeds, int num_hashes,
+                                const FileSpec* filespec)
 {
     BloomFilter * bf = (BloomFilter *)malloc(sizeof(BloomFilter));
     MBArray * array;
@@ -28,63 +26,35 @@ BloomFilter *bloomfilter_Create_Malloc(size_t max_num_elem, double error_rate,
     memset(bf->reserved, 0, sizeof(uint32_t) * 32);
     memset(bf->hash_seeds, 0, sizeof(uint32_t) * 256);
     memcpy(bf->hash_seeds, hash_seeds, sizeof(uint32_t) * num_hashes);
-    array = mbarray_Create_Malloc(num_bits);
+
+    if (filespec) {
+        array = mbarray_Create_Mmap(num_bits, filespec->filename, (char *)bf, sizeof(BloomFilter), filespec->oflags, filespec->perms);
+    } else {
+        array = mbarray_Create_Malloc(num_bits);
+    }
     if (!array) {
         bloomfilter_Destroy(bf);
         return NULL;
+    }
+
+    if (filespec) {
+        /* After we create the new array object, this array may already
+           have all of the bloom filter data from the file in the
+           header info.
+           By calling mbarray_Header, we copy that header data
+           back into this BloomFilter object.
+        */
+        if (mbarray_Header((char *)bf, array, sizeof(BloomFilter)) == NULL) {
+            bloomfilter_Destroy(bf);
+            mbarray_Destroy(array);
+            return NULL;
+        }
     }
 
     bf->array = array;
 
     return bf;
 }
-
-BloomFilter *bloomfilter_Create_Mmap(size_t max_num_elem, double error_rate,
-                                const char * file, BTYPE num_bits, int oflags, int perms,
-                                int *hash_seeds, int num_hashes)
-{
-    BloomFilter * bf = (BloomFilter *)malloc(sizeof(BloomFilter));
-    MBArray * array;
-
-    if (!bf) {
-        return NULL;
-    }
-
-    bf->max_num_elem = max_num_elem;
-    bf->error_rate = error_rate;
-    bf->num_hashes = num_hashes;
-    bf->count_correct = 1;
-    bf->bf_version = BF_CURRENT_VERSION;
-    bf->elem_count = 0;
-    bf->array = NULL;
-    memset(bf->reserved, 0,  sizeof(uint32_t) * 32);
-    memset(bf->hash_seeds, 0, sizeof(uint32_t) * 256);
-    memcpy(bf->hash_seeds, hash_seeds, sizeof(uint32_t) * num_hashes);
-    array = mbarray_Create_Mmap(num_bits, file, (char *)bf, sizeof(BloomFilter), oflags, perms);
-    if (!array) {
-        bloomfilter_Destroy(bf);
-        return NULL;
-    }
-
-    /* After we create the new array object, this array may already
-       have all of the bloom filter data from the file in the
-       header info.
-       By calling mbarray_Header, we copy that header data
-       back into this BloomFilter object.
-    */
-    if (mbarray_Header((char *)bf, array, sizeof(BloomFilter)) == NULL) {
-        bloomfilter_Destroy(bf);
-        mbarray_Destroy(array);
-        return NULL;
-    }
-
-    /* Since we just initialized from a file, we have to
-       fix our pointers */
-    bf->array = array;
-
-    return bf;
-}
-
 
 void bloomfilter_Destroy(BloomFilter * bf)
 {
@@ -184,6 +154,9 @@ BTYPE _hash_char(uint32_t hash_seed, Key * key) {
 
 
 #if 0
+#include <errno.h>
+#include <fcntl.h>
+
 int main(int argc, char **argv)
 {
     int hash_seeds[5] = { 4234 , 2123, 4434, 444, 12123};

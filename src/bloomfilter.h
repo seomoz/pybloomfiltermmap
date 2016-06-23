@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+#include "filespec.h"
 #include "mmapbitarray.h"
 #define BF_CURRENT_VERSION 1
 
@@ -26,14 +27,13 @@ typedef struct {
 
 typedef struct _BloomFilter BloomFilter;
 
-/* Create a bloom filter without a memory-mapped file backing it */
-BloomFilter *bloomfilter_Create_Malloc(size_t max_num_elem, double error_rate,
-                                BTYPE num_bits, int *hash_seeds, int num_hashes);
-
-/* Create a bloom filter with a memory-mapped file backing it */
-BloomFilter *bloomfilter_Create_Mmap(size_t max_num_elem, double error_rate,
-                                const char * file, BTYPE num_bits, int oflags, int perms,
-                                int *hash_seeds, int num_hashes);
+/* Create a bloom filter
+ * filespec determines memory-mapped file that backs the filter. If it is NULL,
+ * malloc filter is created.
+ */
+BloomFilter *bloomfilter_Create(size_t max_num_elem, double error_rate,
+                                BTYPE num_bits, int *hash_seeds, int num_hashes,
+                                const FileSpec* filespec);
 
 void bloomfilter_Destroy(BloomFilter * bf);
 

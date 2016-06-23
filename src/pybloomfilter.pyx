@@ -18,7 +18,7 @@ import shutil
 
 cdef extern int errno
 
-cdef construct_mode(mode):
+cdef construct_oflags(mode):
     result = os.O_RDONLY
     if 'w' in mode:
         result |= os.O_RDWR
@@ -46,9 +46,12 @@ cdef class BloomFilter:
     def __cinit__(self, capacity, error_rate, filename=None, perm=0755):
         cdef char * seeds
         cdef long long num_bits
+        cdef cbloomfilter.FileSpec filespec
+
         self._closed = 0
         self._in_memory = 0
         self.ReadFile = self.__class__.ReadFile
+
         mode = "rw+"
         if filename is NoConstruct:
             return
@@ -62,18 +65,22 @@ cdef class BloomFilter:
             if not os.access(filename, os.O_RDWR):
                 raise OSError("Insufficient permissions for file %s" % filename)
 
-        mode = construct_mode(mode)
+        if filename:
+            filespec.filename = filename
+        else:
+            filespec.filename = NULL
+        filespec.oflags = construct_oflags(mode)
+        filespec.perms = perm
 
 
-        if not mode & os.O_CREAT:
+        if not filespec.oflags & os.O_CREAT:
             if os.path.exists(filename):
-                self._bf = cbloomfilter.bloomfilter_Create_Mmap(capacity,
+                self._bf = cbloomfilter.bloomfilter_Create(capacity,
                                                            error_rate,
-                                                           filename,
                                                            0,
-                                                           mode,
-                                                           perm,
-                                                           NULL, 0)
+                                                           NULL,
+                                                           0,
+                                                           &filespec)
                 if self._bf is NULL:
                     raise ValueError("Invalid %s file: %s" %
                                      (self.__class__.__name__, filename))
@@ -119,21 +126,20 @@ cdef class BloomFilter:
             # If a filename is provided, we should make a mmap-file
             # backed bloom filter. Otherwise, it will be malloc
             if filename:
-                self._bf = cbloomfilter.bloomfilter_Create_Mmap(capacity,
+                self._bf = cbloomfilter.bloomfilter_Create(capacity,
                                                        error_rate,
-                                                       filename,
                                                        num_bits,
-                                                       mode,
-                                                       perm,
                                                        <int *>seeds,
-                                                       num_hashes)
+                                                       num_hashes,
+                                                       &filespec)
             else:
                 self._in_memory = 1
-                self._bf = cbloomfilter.bloomfilter_Create_Malloc(capacity,
+                self._bf = cbloomfilter.bloomfilter_Create(capacity,
                                                        error_rate,
                                                        num_bits,
                                                        <int *>seeds,
-                                                       num_hashes)
+                                                       num_hashes,
+                                                       NULL)
             if self._bf is NULL:
                 if filename:
                     raise OSError(errno, '%s: %s' % (os.strerror(errno),
@@ -318,7 +324,7 @@ cdef class BloomFilter:
 
     @classmethod
     def from_base64(cls, filename, string, perm=0755):
-        bfile_fp = os.open(filename, construct_mode('w+'), perm)
+        bfile_fp = os.open(filename, construct_oflags('w+'), perm)
         os.write(bfile_fp, zlib.decompress(zlib.decompress(
             string.decode('base64')).decode('base64')))
         os.close(bfile_fp)
