@@ -23,15 +23,11 @@ BloomFilter *bloomfilter_Create(size_t max_num_elem, double error_rate,
     bf->bf_version = BF_CURRENT_VERSION;
     bf->elem_count = 0;
     bf->array = NULL;
-    memset(bf->reserved, 0, sizeof(uint32_t) * 32);
-    memset(bf->hash_seeds, 0, sizeof(uint32_t) * 256);
+    memset(bf->reserved, 0, sizeof(bf->reserved));
+    memset(bf->hash_seeds, 0, sizeof(bf->hash_seeds));
     memcpy(bf->hash_seeds, hash_seeds, sizeof(uint32_t) * num_hashes);
 
-    if (filespec) {
-        array = mbarray_Create_Mmap(num_bits, filespec->filename, (char *)bf, sizeof(BloomFilter), filespec->oflags, filespec->perms);
-    } else {
-        array = mbarray_Create_Malloc(num_bits);
-    }
+    array = mbarray_Create(num_bits, bf, sizeof(BloomFilter), filespec);
     if (!array) {
         bloomfilter_Destroy(bf);
         return NULL;
