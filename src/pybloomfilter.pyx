@@ -97,13 +97,14 @@ cdef class BloomFilter:
             # hashes is fractional)."
 
             assert(error_rate > 0.0 and error_rate < 1.0), "error_rate allowable range (0.0,1.0) %f" % (error_rate,)
-            num_hashes = max(int(math.floor(math.log(1.0 / error_rate, 2.0))),1)
-            bits_per_hash = int(math.ceil(
-                    capacity * abs(math.log(error_rate)) /
-                    (num_hashes * (math.log(2) ** 2))))
+            # number of hashes is limited by 256 in the bloomfilter.h
+            log2 = math.log(2)
+            z = - math.log(error_rate) / log2
+            num_hashes = min(max(int(math.floor(z)), 1), 256)
+            bits_per_hash = int(math.ceil(capacity * z / (num_hashes * log2)))
 
             # mininum bitvector of 128 bits
-            num_bits = max(num_hashes * bits_per_hash,128)
+            num_bits = max(num_hashes * bits_per_hash, 128)
 
             #print "k = %d  m = %d  n = %d   p ~= %.8f" % (
             #    num_hashes, num_bits, capacity,
