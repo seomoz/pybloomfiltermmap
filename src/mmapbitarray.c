@@ -352,6 +352,11 @@ char * mbarray_CharData(MBArray * array)
     return (char *)array->vector;
 }
 
+size_t mbarray_CharData_Length(MBArray * array)
+{
+    return _mmap_size(array);
+}
+
 
 int mbarray_Update(MBArray * array, char * data, int size)
 {

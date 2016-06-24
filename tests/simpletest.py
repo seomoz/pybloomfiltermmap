@@ -1,4 +1,6 @@
 import os
+import random
+import re
 import string
 import unittest
 import tempfile
@@ -206,9 +208,38 @@ class SimpleTestCase(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix='.bloom') as f2:
             self.assertRaises(NotImplementedError, bf.copy, f2.name)
 
-    def test_to_base64_does_not_segfault(self):
-        bf = pybloomfilter.BloomFilter(100, 0.01)
-        self.assertRaises(NotImplementedError, bf.to_base64)
+    # def test_to_base64_does_not_segfault(self):
+    #     bf = pybloomfilter.BloomFilter(100, 0.01)
+    #     self.assertRaises(NotImplementedError, bf.to_base64)
+
+    @with_test_file
+    def test_to_base64_for_mmap_and_malloc_is_identical(self, filename):
+        state = random.getstate()
+        random.seed(123)
+        bf_mmap = pybloomfilter.BloomFilter(100, 0.01, filename)
+        bf_mmap.sync()
+        random.seed(123)
+        bf_malloc = pybloomfilter.BloomFilter(100, 0.01)
+        random.setstate(state)
+
+        self.assertEqual(bf_mmap.to_base64(), bf_malloc.to_base64())
+
+    @with_test_file
+    def test_mmap(self, filename):
+        state = random.getstate()
+        random.seed(123)
+        bf = pybloomfilter.BloomFilter(100, 0.1, filename)
+        random.setstate(state)
+        dump(bf.xxx())
+        # self.assertEqual(bf.xxx().replace('\x00', ' '), '')
+
+    def test_memview(self):
+        state = random.getstate()
+        random.seed(123)
+        bf = pybloomfilter.BloomFilter(100, 0.1)
+        random.setstate(state)
+        dump(bf.xxx())
+        # self.assertEqual(bf.xxx().replace('\x00', ' '), '')
 
     def test_ReadFile_is_public(self):
         self.assertEquals(
@@ -219,6 +250,21 @@ class SimpleTestCase(unittest.TestCase):
         self.assertEquals(pybloomfilter.BloomFilter.ReadFile,
                           bf.ReadFile)
 
+def dump(s):
+    offset = 0
+    print('\n******')
+    while offset < len(s):
+        seg = s[offset: offset + 16]
+        acc = "%04X: " % offset
+        for ch in seg[:8]:
+            acc += " %02X" % ord(ch)
+        acc += ' '
+        for ch in seg[8:]:
+            acc += " %02X" % ord(ch)
+        acc += ' ' * ((16 - len(seg)) * 3) + '  * '
+        acc += re.sub(r'[^ -~]', '.', seg.replace('\x00', ' '))
+        print(acc)
+        offset += 16
 
 def suite():
     suite = unittest.TestSuite()

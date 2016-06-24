@@ -26,6 +26,7 @@ cdef extern from "mmapbitarray.h":
      int mbarray_Update(MBArray * array, char * data, int size)
      int mbarray_FileSize(MBArray * array)
      char * mbarray_CharData(MBArray * array)
+     Py_ssize_t mbarray_CharData_Length(MBArray * array)
 
 
 cdef extern from "bloomfilter.h":

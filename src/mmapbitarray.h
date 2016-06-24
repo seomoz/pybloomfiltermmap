@@ -66,7 +66,9 @@ int mbarray_Update(MBArray * array, char * data, int size);
 
 uint64_t mbarray_FileSize(MBArray * array);
 
+/* low-level access to the bitarray data */
 char * mbarray_CharData(MBArray * array);
+size_t mbarray_CharData_Length(MBArray * array);
 
 static inline size_t _vector_offset(MBArray * array, BTYPE bit)
 {

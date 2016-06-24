@@ -316,11 +316,19 @@ cdef class BloomFilter:
         return
 
     def to_base64(self):
+        cdef char* c_string = NULL
+        cdef Py_ssize_t length = 0
+
         self._assert_open()
-        bfile = open(self.name, 'r')
-        result = zlib.compress(zlib.compress(bfile.read(), 9).encode('base64')).encode('base64')
-        bfile.close()
-        return result
+        if self._in_memory:
+            c_string = cbloomfilter.mbarray_CharData(self._bf.array)
+            length = cbloomfilter.mbarray_CharData_Length(self._bf.array)
+            data = c_string[:length]
+        else:
+            bfile = open(self.name, 'r')
+            data = bfile.read()
+            bfile.close()
+        return zlib.compress(zlib.compress(data, 9).encode('base64')).encode('base64')
 
     @classmethod
     def from_base64(cls, filename, string, perm=0755):
@@ -329,6 +337,28 @@ cdef class BloomFilter:
             string.decode('base64')).decode('base64')))
         os.close(bfile_fp)
         return cls.open(filename)
+
+    def yyy(self):
+        cdef char * c_string = cbloomfilter.mbarray_CharData(self._bf.array)
+        cdef Py_ssize_t length = cbloomfilter.mbarray_CharData_Length(self._bf.array)
+
+        result = zlib.decompress(zlib.compress(c_string[:length]))
+        return c_string[:length]
+
+    def xxx(self):
+        cdef char* c_string = NULL
+        cdef Py_ssize_t length = 0
+
+        self._assert_open()
+        if self._in_memory:
+            c_string = cbloomfilter.mbarray_CharData(self._bf.array)
+            length = cbloomfilter.mbarray_CharData_Length(self._bf.array)
+            data = c_string[:length]
+        else:
+            bfile = open(self.name, 'r')
+            data = bfile.read()
+            bfile.close()
+        return data
 
     @classmethod
     def open(cls, filename):
